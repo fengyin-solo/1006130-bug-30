@@ -1,4 +1,38 @@
-<template>
+/**
+ * 一次性代码生成：18 个业务页面同构，统一从模块元数据取列/动作/状态/统计，
+ * 登记与重置都走 local-service 的唯一入口。脚本可重复执行，结果幂等。
+ * 运行：node scripts/generate-views.mjs
+ */
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+
+const here = dirname(fileURLToPath(import.meta.url))
+const viewsDir = join(here, '..', 'src', 'views')
+
+// 与 src/data/modules.ts 的顺序保持一致
+const MODULES = [
+  ['shield', '盾构机'],
+  ['ring', '掘进环'],
+  ['segment', '管片环'],
+  ['grouting', '注浆记录'],
+  ['muck', '渣土运输单'],
+  ['settlement', '沉降测点'],
+  ['axis', '轴线测量'],
+  ['cutter', '刀具'],
+  ['segmentprod', '管片'],
+  ['mortar', '浆液批次'],
+  ['ventilation', '通风机组'],
+  ['building', '监测对象'],
+  ['utility', '地下管线'],
+  ['progress', '进度节点'],
+  ['testing', '试验委托'],
+  ['drill', '应急演练'],
+  ['crew', '施工班组'],
+  ['safety', '巡检记录'],
+]
+
+const template = (key) => `<template>
   <section class="page" :data-module="meta.key">
     <header class="page-head">
       <div>
@@ -30,7 +64,7 @@
     <form class="filter-bar" @submit.prevent="reload">
       <label v-for="field in filterFields" :key="field" class="filter-item">
         <span>{{ field }}</span>
-        <input v-model="filters[field]" :placeholder="`按${field}检索`" />
+        <input v-model="filters[field]" :placeholder="\`按\${field}检索\`" />
       </label>
       <button class="btn" type="submit">查询</button>
       <button class="btn ghost" type="button" @click="resetFilters">重置条件</button>
@@ -92,7 +126,7 @@ import {
 } from '@/api/local-service'
 import type { EntryRow, MetricCard } from '@/data/types'
 
-const meta = moduleMeta('ring')
+const meta = moduleMeta('${key}')
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
@@ -178,3 +212,11 @@ async function reload() {
 
 onMounted(reload)
 </script>
+`
+
+for (const [key] of MODULES) {
+  const dir = join(viewsDir, key)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'index.vue'), template(key), 'utf8')
+  console.log('generated', key)
+}

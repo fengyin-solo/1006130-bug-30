@@ -1,13 +1,16 @@
 <template>
-  <section class="page" data-module="shield">
+  <section class="page" :data-module="meta.key">
     <header class="page-head">
       <div>
-        <h2>盾构机台账管理</h2>
-        <p class="page-desc">维护盾构机，围绕盾构机编号、盾构机型号、开挖直径、刀盘形式做登记、筛选与状态流转。</p>
+        <h2>{{ meta.name }}管理</h2>
+        <p class="page-desc">{{ meta.desc }}</p>
       </div>
       <div class="page-actions">
-        <button class="btn primary" type="button" @click="openCreate">登记盾构机</button>
-        <button class="btn" type="button" @click="exportRows">导出盾构机台账清单</button>
+        <button class="btn primary" type="button" @click="openCreate">登记{{ meta.entity }}</button>
+        <button class="btn" type="button" @click="exportRows">导出{{ meta.name }}清单</button>
+        <button class="btn ghost" type="button" :disabled="resetting" @click="resetData">
+          {{ resetting ? '重置中…' : '重置为样例数据' }}
+        </button>
       </div>
     </header>
 
@@ -36,18 +39,18 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th v-for="column in columns" :key="column">{{ column }}</th>
+          <th v-for="column in meta.fields" :key="column">{{ column }}</th>
           <th>当前状态</th>
           <th>可执行动作</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="row in rows" :key="String(row.id)">
-          <td v-for="column in columns" :key="column">{{ row[column] ?? '—' }}</td>
+          <td v-for="column in meta.fields" :key="column">{{ row[column] ?? '—' }}</td>
           <td>{{ row.status }}</td>
           <td class="row-actions">
             <button
-              v-for="action in actions"
+              v-for="action in meta.actions"
               :key="action"
               class="link"
               type="button"
@@ -58,50 +61,63 @@
           </td>
         </tr>
         <tr v-if="!rows.length">
-          <td :colspan="columns.length + 2" class="empty-state">暂无盾构机台账数据，可先登记盾构机</td>
+          <td :colspan="meta.fields.length + 2" class="empty-state">
+            暂无{{ meta.name }}数据，可先登记{{ meta.entity }}
+          </td>
         </tr>
       </tbody>
     </table>
 
     <footer class="page-foot">
-      <span>共 {{ total }} 条盾构机台账记录</span>
+      <span>共 {{ total }} 条{{ meta.name }}记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
+
+    <EntryCreateModal :open="createOpen" :meta="meta" :on-submit="handleCreate" @close="createOpen = false" />
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
+import EntryCreateModal from '@/components/EntryCreateModal.vue'
 import {
+  createEntry,
   downloadEntries,
-  listEntries,
   moduleMeta,
+  moduleStats,
+  reloadEntries,
+  resetModuleEntries,
   runAction as applyAction,
 } from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import type { EntryRow, MetricCard } from '@/data/types'
 
 const meta = moduleMeta('shield')
-const columns = ["盾构机编号", "盾构机型号", "开挖直径", "刀盘形式", "总推力", "进场日期", "维保单位", "设备状态"]
-const actions = ["办理进场", "开始调试", "办理退场"]
-const statuses = ["待进场", "调试中", "掘进中", "已退场"]
-const stats = [{"label": "在场盾构机", "value": 0}, {"label": "掘进中盾构机", "value": 0}, {"label": "待维保盾构机", "value": 0}]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
+const stats = ref<MetricCard[]>([])
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
-const filterFields = columns.slice(0, 3)
+const filterFields = meta.fields.slice(0, 3)
+const createOpen = ref(false)
+const resetting = ref(false)
+
 const statusSummary = computed(() =>
-  statuses.map((status: string) => ({
+  meta.statuses.map((status: string) => ({
     status,
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
 
+// 统计始终按全量数据算（不受筛选影响），所有页面同一份口径
+function refreshStats() {
+  stats.value = moduleStats(meta.key)
+}
+
 function resetFilters() {
   filters.value = {}
-  reload()
+  void reload()
 }
 
 function exportRows() {
@@ -109,27 +125,54 @@ function exportRows() {
 }
 
 function openCreate() {
-  errorMessage.value = '盾构机登记入口尚未接入审批流'
+  errorMessage.value = ''
+  createOpen.value = true
 }
 
-function runAction(action: string, row: EntryRow) {
+// 登记 -> 回列表再看一次（service 内部失败重试，旧结果不许顶上来）
+async function handleCreate(input: Record<string, unknown>) {
+  const result = createEntry(meta.key, input)
+  if (!result.ok) {
+    throw new Error(result.message)
+  }
+  await reload()
+}
+
+async function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
   const result = applyAction(meta.key, Number(row.id), action)
   if (!result.ok) {
     errorMessage.value = result.message
     return
   }
-  reload()
+  await reload()
 }
 
-function reload() {
+// 重置走唯一入口：跑完只剩样例那一份；重读同样带重试。
+async function resetData() {
+  errorMessage.value = ''
+  resetting.value = true
+  try {
+    resetModuleEntries(meta.key)
+    await reload()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '重置失败，请重试'
+  } finally {
+    resetting.value = false
+  }
+}
+
+async function reload() {
   errorMessage.value = ''
   try {
-    const payload = listEntries(meta.key, filters.value)
+    const payload = await reloadEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    refreshStats()
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '盾构机台账列表读取失败'
+    // 读不回来就明说，不拿旧列表冒充新结果
+    errorMessage.value = error instanceof Error ? error.message : meta.name + '列表读取失败'
+    refreshStats()
   }
 }
 

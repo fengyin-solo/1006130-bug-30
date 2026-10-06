@@ -54,11 +54,10 @@ yarn-error.log*
 pnpm-debug.log*
 
 # ===== 环境变量与本地配置 =====
-.env
+# 根目录 .env 是入仓的唯一配置口径（见 .env 注释），不忽略；只忽略本地覆盖件。
 .env.local
 .env.*.local
-*.env
-!.env.example
+*.env.local
 
 # ===== 测试覆盖率 =====
 coverage/

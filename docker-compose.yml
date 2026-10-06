@@ -1,5 +1,17 @@
+# 所有取值来自仓库根目录 .env（docker compose 默认读取项目根的 .env 做替换），
+# 版本 / 端口不在此另写，保证本地与容器同源。
 services:
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NODE_VERSION: ${NODE_VERSION}
+        FRONTEND_PORT: ${FRONTEND_PORT}
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+    environment:
+      # 覆盖 vite.config.ts 在容器里的监听地址，env 仍只认根目录那一份
+      VITE_DEV_HOST: ${CONTAINER_HOST}
+      VITE_API_BASE: ${VITE_API_BASE}
+      VITE_APP_NAME: ${VITE_APP_NAME}
