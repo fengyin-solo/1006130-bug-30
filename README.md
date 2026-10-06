@@ -63,9 +63,15 @@ npm run build
 
 ## 约定
 
-- 每个模块的页面在 `frontend/src/views/<模块>/index.vue`，页面只负责渲染，读写统一走
-  `frontend/src/api/local-service.ts`。
-- 字段、状态、动作与流转目标集中在 `frontend/src/data/modules.ts`；示例数据在
-  `frontend/src/data/seed.ts`。
-- 状态流转只允许在 `local-service.ts` 里改，页面组件不做业务判断。
-- 想回到初始数据：清掉浏览器里 `shield-tunnel-construction:entries` 这一项，或调用 `resetModule(模块)`。
+- 依赖版本、环境变量与构建参数只有仓库根 `.env` 一份：本地 `npm run dev`（vite envDir 指向根）
+  与 `docker compose up`（compose 自动加载、Dockerfile 用同名构建参数）都从它取值；个人覆盖放
+  `.env.local`（已被 gitignore）。依赖按 `frontend/package-lock.json` 用 `npm ci` 安装，不漂移。
+- 每个模块的页面在 `frontend/src/views/<模块>/index.vue`，只是 `components/ModulePage.vue` 的薄封装；
+  读写统一走 `frontend/src/api/local-service.ts`，页面不做业务判断。
+- 字段、数值口径（`numericFields`）、状态、动作与流转目标集中在 `frontend/src/data/modules.ts`；
+  示例数据在 `frontend/src/data/seed.ts`。数值字段读、迁移、登记都归一成 `number`，缺字段按样例补齐。
+- 状态流转、登记、重置只允许在 `local-service.ts` 里改：登记重复编号只留最早一条，入库失败一律不落；
+  重置走 `resetModule/resetAllModules` 同一入口，幂等，跑完只剩样例那一份。存储迁移带版本检查点，
+  中断后从断点续跑，重复装载不翻倍。
+- 想回到初始数据：点各模块页「恢复样例数据」（或概览页「全部恢复样例数据」），也可清掉浏览器里
+  `shield-tunnel-construction:entries` 这一项。

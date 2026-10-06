@@ -1,5 +1,13 @@
+# 本文件不写死任何版本/端口：变量统一从仓库根 .env 取（compose 自动加载）。
 services:
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_VERSION: ${NODE_VERSION}
+        WEB_PORT: ${WEB_PORT}
     ports:
-      - "5173:5173"
+      - "${WEB_PORT}:${WEB_PORT}"
+    env_file:
+      - .env

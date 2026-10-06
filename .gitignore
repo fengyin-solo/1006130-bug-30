@@ -53,12 +53,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# ===== 环境变量与本地配置 =====
-.env
+# ===== 环境变量与本地覆盖 =====
+# 仓库根 .env 是唯一口径，必须入库；只有个人覆盖文件忽略。
 .env.local
 .env.*.local
-*.env
-!.env.example
+*.env.local
 
 # ===== 测试覆盖率 =====
 coverage/
